@@ -6,7 +6,8 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Layouts,
-  FMX.Controls.Presentation, FMX.StdCtrls, uElementsDuJeu, FMX.Objects;
+  FMX.Controls.Presentation, FMX.StdCtrls, uElementsDuJeu, FMX.Objects,
+  FMX.Effects;
 
 const
   CTailleBloc = 20;
@@ -21,11 +22,32 @@ type
     lblScore: TLabel;
     BoucleDuJeu: TTimer;
     zoneJeu: TRectangle;
+    zoneEcran: TScaledLayout;
+    clicGauche: TLayout;
+    clicRight: TLayout;
+    clicRightImg: TPath;
+    clicGaucheImg: TPath;
+    clicChute: TLayout;
+    zoneEcranClient: TLayout;
+    clicChuteImg: TPath;
+    ShadowEffect1: TShadowEffect;
+    ShadowEffect2: TShadowEffect;
+    ShadowEffect3: TShadowEffect;
+    clicRotation: TLayout;
+    ClicRotationHaut: TLayout;
+    clicRotationImg: TPath;
+    ShadowEffect4: TShadowEffect;
+    StyleBook1: TStyleBook;
     procedure FormCreate(Sender: TObject);
     procedure btnJouerClick(Sender: TObject);
     procedure BoucleDuJeuTimer(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: Char;
       Shift: TShiftState);
+    procedure FormResize(Sender: TObject);
+    procedure clicGaucheClick(Sender: TObject);
+    procedure clicRightClick(Sender: TObject);
+    procedure clicChuteClick(Sender: TObject);
+    procedure clicRotationClick(Sender: TObject);
   private
     { Déclarations privées }
     FScore: integer;
@@ -39,11 +61,14 @@ type
     procedure PartiePerdue;
     procedure FigerPiece;
     procedure SetPartieEnCours(const Value: boolean);
+    procedure RetailleZoneEcran;
+    function GetIsPlateformeMobile: boolean;
   public
     { Déclarations publiques }
     GrilleDeJeu: TGrilleDeJeu;
     PieceEnCours: TTetrisPiece;
     VitesseDeChute: integer;
+    property isPlateformeMobile: boolean read GetIsPlateformeMobile;
     property PartieEnCours: boolean read FPartieEnCours write SetPartieEnCours;
     property NiveauDuJeu: integer read FNiveauDuJeu write SetNiveauDuJeu;
     property Score: integer read FScore write SetScore;
@@ -55,6 +80,9 @@ var
 implementation
 
 {$R *.fmx}
+
+uses
+  System.StrUtils;
 
 procedure TfrmMain.AjouteUnePiece;
 var
@@ -114,6 +142,30 @@ begin
   LancerPartie;
 end;
 
+procedure TfrmMain.clicChuteClick(Sender: TObject);
+begin
+  if PartieEnCours then
+    VitesseDeChute := CTailleBloc;
+end;
+
+procedure TfrmMain.clicGaucheClick(Sender: TObject);
+begin
+  if PartieEnCours and assigned(PieceEnCours) then
+    PieceEnCours.DeplaceVersLaGauche;
+end;
+
+procedure TfrmMain.clicRightClick(Sender: TObject);
+begin
+  if PartieEnCours and assigned(PieceEnCours) then
+    PieceEnCours.DeplaceVersLaDroite;
+end;
+
+procedure TfrmMain.clicRotationClick(Sender: TObject);
+begin
+  if PartieEnCours and assigned(PieceEnCours) then
+    PieceEnCours.FaitTourner;
+end;
+
 procedure TfrmMain.FigerPiece;
 var
   i, j, k: integer;
@@ -166,6 +218,11 @@ end;
 
 procedure TfrmMain.FormCreate(Sender: TObject);
 begin
+  clicGauche.Visible := isPlateformeMobile;
+  clicRight.Visible := isPlateformeMobile;
+  clicChute.Visible := isPlateformeMobile;
+  clicRotation.Visible := isPlateformeMobile;
+  lblScore.BringToFront;
   PieceEnCours := nil;
   Score := 0;
   NiveauDuJeu := CTailleBloc;
@@ -202,14 +259,29 @@ begin
   end;
 end;
 
+procedure TfrmMain.FormResize(Sender: TObject);
+begin
+  RetailleZoneEcran;
+end;
+
+function TfrmMain.GetIsPlateformeMobile: boolean;
+begin
+{$IF Defined(IOS) or Defined(ANDROID) or Defined(DEBUG)}
+  result := true;
+{$ELSE}
+  result := false;
+{$ENDIF}
+end;
+
 procedure TfrmMain.InitialiseEcran;
 var
   i, j: integer;
 begin
   if assigned(PieceEnCours) then
     FreeAndNil(PieceEnCours);
-  zoneJeu.width := CTailleBloc * CNBColonnes;
-  zoneJeu.height := CTailleBloc * CNBLignes;
+  zoneEcran.originalwidth := CTailleBloc * CNBColonnes;
+  zoneEcran.originalheight := CTailleBloc * CNBLignes;
+  RetailleZoneEcran;
   while (zoneJeu.ChildrenCount > 0) do
     zoneJeu.Children[0].free;
   for i := 1 to CNBColonnes do
@@ -231,13 +303,39 @@ begin
   if PartieEnCours then
   begin
     PartieEnCours := false;
-    showmessage('Perdu');
+    showmessage('Perdu avec un score est de ' + Score.ToString + ' point' +
+      ifthen((Score > 1), 's', '') + '.');
   end
   else
   begin
     InitialiseEcran;
     AjouteUnePiece;
   end;
+end;
+
+procedure TfrmMain.RetailleZoneEcran;
+var
+  RatioW, RatioH: single;
+  marge: integer;
+  LargeurMax, HauteurMax: integer;
+begin
+  if isPlateformeMobile then
+    marge := 60
+  else
+    marge := 40;
+  LargeurMax := (ClientWidth - marge * 2);
+  HauteurMax := (ClientHeight - marge * 2);
+  RatioW := LargeurMax / zoneEcran.originalwidth;
+  RatioH := HauteurMax / zoneEcran.originalheight;
+  zoneEcran.beginupdate;
+  zoneEcran.width := zoneEcran.originalwidth * RatioW;
+  zoneEcran.height := zoneEcran.originalheight * RatioW;
+  if (zoneEcran.width > LargeurMax) or (zoneEcran.height > HauteurMax) then
+  begin
+    zoneEcran.width := zoneEcran.originalwidth * RatioH;
+    zoneEcran.height := zoneEcran.originalheight * RatioH;
+  end;
+  zoneEcran.endupdate;
 end;
 
 procedure TfrmMain.SetNiveauDuJeu(const Value: integer);
